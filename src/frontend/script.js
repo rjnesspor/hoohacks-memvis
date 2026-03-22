@@ -1,5 +1,4 @@
-const heapFileInput = document.getElementById('heap_input_file');
-const funcFileInput = document.getElementById('func_input_file');
+const fileInput = document.getElementById('input_file');
 
 let heapData = [];
 let heapChart = null;
@@ -15,29 +14,21 @@ function readFileAsText(file) {
 }
 
 async function loadStuff() {
-    const heapFile = heapFileInput.files[0];
-    const funcFile = funcFileInput.files[0];
+    const inputFile = fileInput.files[0];
 
-    if (!heapFile || !funcFile) return;
+    if (!inputFile) return alert(`You haven't input a file. Try again.`);
 
-    const [heapText, funcText] = await Promise.all([
-        readFileAsText(heapFile),
-        readFileAsText(funcFile)
-    ]);
+    const text = await readFileAsText(inputFile);
+    const parsed = JSON.parse(text);
 
-
-    heapData = [];
-    heapText.split('\n').forEach((line, i) => {
-        const trimmed = line.trim();
-        if (!trimmed) return;
-        try { heapData.push(JSON.parse(trimmed)); }
-        catch (err) { console.warn(`Heap parse error line ${i + 1}:`, err.message); }
-    });
-
-    const traceEvents = JSON.parse(funcText)["traceEvents"];
+    const traceEvents = parsed["traceEvents"];
+    const stackEvents = parsed["stackMemory"];
+    heapData = parsed["heapMemory"];
 
     heapChart = constructHeapGraph(heapData);
     const timeline = drawTimelineGraph(traceEvents);
+
+    constructStackGraph(stackEvents);
 
     heapChart.data.datasets[0]._origColors = [...heapChart.data.datasets[0].pointBackgroundColor];
     timeline.linkHeapChart(heapChart, heapData);
@@ -46,8 +37,98 @@ async function loadStuff() {
     leakedPtrs = updateInfoBox(heapData);
 }
 
+function extractStackData(data) {
+    const functionDeltas = {};
+    const enterMap = {};
 
-function extractData(data) {
+    for (const event of data) {
+        if (event.event === "function enter") {
+            if (event.name === "main") {
+                functionDeltas["libc"] = event.size;
+            }
+            enterMap[event.id] = event;
+        } else if (event.event === "function exit") {
+            const enter = enterMap[event.id];
+            if (!enter) continue;
+
+            const delta = Math.max(0, event.size - enter.size);
+
+            if (!functionDeltas[event.name]) {
+                functionDeltas[event.name] = 0;
+            }
+            functionDeltas[event.name] += delta;
+
+            delete enterMap[event.id];
+        }
+    }
+
+    console.log(functionDeltas);
+
+    const labels = Object.keys(functionDeltas);
+    const parsedData = labels.map(name => functionDeltas[name]);
+
+    // Sort both arrays together by value, descending
+    const sorted = labels
+        .map((label, i) => ({ label, value: parsedData[i] }))
+        .sort((a, b) => b.value - a.value);
+
+    return [sorted.map(x => x.value), sorted.map(x => x.label)];
+}
+
+function constructStackGraph(data) {
+    const stackGraph = document.getElementById('stack_graph');
+    let [stackData, labels] = extractStackData(data);
+
+    let dataset = {
+        label: "Program Stack Growth",
+        data: stackData,
+        backgroundColor: '#378ADD',
+        borderColor: '#4a5068',
+        borderWidth: 1,
+    }
+
+    new Chart(stackGraph, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [dataset]
+        },
+        options: {
+            scales: {
+                x: {
+                    grid: {
+                        color: '#2e3348',
+                    },
+                    ticks: {
+                        color: '#8b90a7',
+                    }
+                },
+                y: {
+                    grid: {
+                        color: '#2e3348',
+                    },
+                    ticks: {
+                        color: '#8b90a7',
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    displayColors: false,
+                    bodyColor: 'white',
+                    titleColor: 'white',
+                    callbacks: {
+                        label: function (tooltipItem) {
+                            return `Stack Growth: ${formatBytes(tooltipItem.raw)}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function extractHeapData(data) {
     let delta = [0];
     let labels = [data[0]?.ts ?? 0];
     let pointColors = ['gray'];
@@ -95,7 +176,7 @@ function extractData(data) {
 
 function constructHeapGraph(data) {
     const heapGraph = document.getElementById('heap_graph');
-    let [delta, labels, pointColors] = extractData(data);
+    let [delta, labels, pointColors] = extractHeapData(data);
 
     let dataset = {
         label: "Program Heap Allocations",
@@ -323,6 +404,7 @@ function drawTimelineGraph(traceEvents) {
     }
 
     canvas.addEventListener('mousemove', (e) => {
+        if (document.getElementById('leak-mode-toggle').checked) return;
         const rect = canvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
@@ -348,6 +430,7 @@ function drawTimelineGraph(traceEvents) {
     });
 
     canvas.addEventListener('mouseleave', () => {
+        if (document.getElementById('leak-mode-toggle').checked) return;
         hoveredFn = null;
         draw();
         syncHeap();

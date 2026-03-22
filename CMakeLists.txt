@@ -8,7 +8,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Shared object that gets LD_PRELOADed
 add_library(wrap SHARED
     src/backend/heap_analyzer.c
-    src/backend/function_analyzer.cpp
+    src/backend/trace_analyzer.c
+    src/backend/stack_analyzer.c
+    src/backend/logger.c
+    src/backend/init.c
 )
 
 add_subdirectory(external/cJSON)
@@ -30,29 +33,12 @@ set_target_properties(wrap PROPERTIES
     PREFIX ""
 )
 
-add_library(eric_wrap SHARED
-    src/backend/function_analyzer.cpp
-)
-target_link_libraries(eric_wrap PRIVATE dl cjson)
-target_include_directories(eric_wrap PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/cJSON
-    tracer_state.h
-)
-
-# Prevent the wrapper itself from being instrumented
-target_compile_options(eric_wrap PRIVATE
-    -fPIC
-)
 
 
 
 # Runner executable
 add_executable(runner
     src/runner/runner.c
-)
-
-add_executable(erics_runner
-    src/runner/erics_runner.c
 )
 
 # Central place for all flags required by traced executables
@@ -62,11 +48,9 @@ target_compile_options(instrumentation_flags INTERFACE
     -finstrument-functions
     -fno-omit-frame-pointer
     -fno-inline
+    -g3
+    -O0
 )
-
-# target_link_libraries(instrumentation_flags INTERFACE
-#     eric_wrap
-# )
 
 target_link_options(instrumentation_flags INTERFACE
     -rdynamic
@@ -117,8 +101,8 @@ target_link_options(leaky PRIVATE
 target_link_libraries(leaky PRIVATE instrumentation_flags)
 
 
-add_executable(overlap-add 
-    tests/fft-convolution.cpp
+add_executable(snake
+    tests/snake.c
 )
 
-target_link_libraries(overlap-add PRIVATE instrumentation_flags fftw3)
+target_link_libraries(snake PRIVATE instrumentation_flags)

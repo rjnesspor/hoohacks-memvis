@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stddef.h>
 
 extern void* (*real_malloc)(size_t);
 extern void* (*real_calloc)(size_t, size_t);

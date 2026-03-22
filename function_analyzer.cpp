@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include "now.h"
 #include "stack.h"
-
+#include "logger.h"
 
 #include "tracer_state.h"
 
@@ -37,11 +37,11 @@ struct finished_trace_event {
 static constexpr size_t MAX_STACK_DEPTH = 256;
 static constexpr size_t TRACE_BUFFER_SIZE = 1024;
 
-thread_local active_event call_stack[MAX_STACK_DEPTH];
-thread_local size_t call_depth = 0;
+static active_event call_stack[MAX_STACK_DEPTH];
+static size_t call_depth = 0;
 
-thread_local finished_trace_event trace_buffer[TRACE_BUFFER_SIZE];
-thread_local size_t trace_count = 0;
+static finished_trace_event trace_buffer[TRACE_BUFFER_SIZE];
+static size_t trace_count = 0;
 
 
 
@@ -189,6 +189,8 @@ static void record_enter(void *fn) {
     uint64_t id = ID.fetch_add(1, std::memory_order_relaxed);
     active_event ev{fn, bench_now_ns(), id, stack_top - get_sp()};
     call_stack[call_depth++] = ev;
+
+    log_stack_entry(fn, bench_now_ns(), stack_top - get_sp(), id, FUNCTION_ENTER);
 }
 
 __attribute__((no_instrument_function))
@@ -215,29 +217,20 @@ static void func_exit(void) {
 
     trace_buffer[trace_count++] = finished_event;
 
+    log_function_entry(ev.fn, ev.start_ns, end, ev.id);
+    log_stack_entry(ev.fn, bench_now_ns(), stack_top - get_sp(), ev.id, FUNCTION_EXIT);
+
 
     if (call_depth == 0) {
         // likely going to exit, flush buffers
         add_buffered_events_to_json();
+        flush_logger();
         trace_count = 0;
     }
 }
 
+
 extern "C" {
-
-__attribute__((no_instrument_function))
-void __cyg_profile_func_enter(void *this_fn, void *call_site) {
-    (void) call_site;
-    record_enter(this_fn);
-}
-
-__attribute__((no_instrument_function))
-void __cyg_profile_func_exit(void *this_fn, void *call_site) {
-    (void)this_fn;
-    (void)call_site;
-    func_exit();
-}
-
 
 uint64_t get_function_id(void) {
     return call_stack[call_depth - 1].id;
