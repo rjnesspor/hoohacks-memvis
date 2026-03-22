@@ -30,13 +30,13 @@ static struct termios original_termios;
 
 /* ---------------- terminal helpers ---------------- */
 
-static void disable_raw_mode(void) {
+void disable_raw_mode(void) {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
     printf("\x1b[?25h"); /* show cursor */
     fflush(stdout);
 }
 
-static void enable_raw_mode(void) {
+void enable_raw_mode(void) {
     tcgetattr(STDIN_FILENO, &original_termios);
     atexit(disable_raw_mode);
 
@@ -50,7 +50,7 @@ static void enable_raw_mode(void) {
     fflush(stdout);
 }
 
-static int read_key_nonblocking(void) {
+int read_key_nonblocking(void) {
     fd_set set;
     struct timeval tv;
 
@@ -91,7 +91,7 @@ static int read_key_nonblocking(void) {
 
 /* ---------------- snake helpers ---------------- */
 
-static Segment *make_segment(int x, int y) {
+Segment *make_segment(int x, int y) {
     Segment *seg = (Segment *)malloc(sizeof(Segment));
     if (!seg) {
         perror("malloc");
@@ -103,7 +103,7 @@ static Segment *make_segment(int x, int y) {
     return seg;
 }
 
-static void push_head(Game *g, int x, int y) {
+void push_head(Game *g, int x, int y) {
     Segment *seg = make_segment(x, y);
     seg->next = g->head;
     g->head = seg;
@@ -113,7 +113,7 @@ static void push_head(Game *g, int x, int y) {
     }
 }
 
-static void pop_tail(Game *g) {
+void pop_tail(Game *g) {
     if (!g->tail) return;
 
     if (g->head == g->tail) {
@@ -133,7 +133,7 @@ static void pop_tail(Game *g) {
     g->tail->next = NULL;
 }
 
-static bool snake_contains(const Game *g, int x, int y) {
+bool snake_contains(const Game *g, int x, int y) {
     for (Segment *cur = g->head; cur; cur = cur->next) {
         if (cur->x == x && cur->y == y) {
             return true;
@@ -142,7 +142,7 @@ static bool snake_contains(const Game *g, int x, int y) {
     return false;
 }
 
-static bool collision_with_body(const Game *g, int x, int y, bool will_grow) {
+bool collision_with_body(const Game *g, int x, int y, bool will_grow) {
     for (Segment *cur = g->head; cur; cur = cur->next) {
         /* Allow moving into the current tail cell only if the tail will move away */
         if (!will_grow && cur == g->tail) {
@@ -155,14 +155,14 @@ static bool collision_with_body(const Game *g, int x, int y, bool will_grow) {
     return false;
 }
 
-static void place_food(Game *g) {
+void place_food(Game *g) {
     do {
         g->food_x = rand() % g->width;
         g->food_y = rand() % g->height;
     } while (snake_contains(g, g->food_x, g->food_y));
 }
 
-static Game *create_game(int width, int height) {
+Game *create_game(int width, int height) {
     Game *g = (Game *)malloc(sizeof(Game));
     if (!g) {
         perror("malloc");
@@ -190,7 +190,7 @@ static Game *create_game(int width, int height) {
     return g;
 }
 
-static void destroy_game(Game *g) {
+void destroy_game(Game *g) {
     Segment *cur = g->head;
     while (cur) {
         Segment *next = cur->next;
@@ -200,7 +200,7 @@ static void destroy_game(Game *g) {
     free(g);
 }
 
-static void handle_input(Game *g, int key) {
+void handle_input(Game *g, int key) {
     switch (key) {
         case 'w':
         case 'W':
@@ -237,7 +237,7 @@ static void handle_input(Game *g, int key) {
     }
 }
 
-static void update_game(Game *g) {
+void update_game(Game *g) {
     int new_x = g->head->x + g->dx;
     int new_y = g->head->y + g->dy;
 
@@ -265,7 +265,7 @@ static void update_game(Game *g) {
 
 /* ---------------- rendering ---------------- */
 
-static char **allocate_board(int width, int height) {
+char **allocate_board(int width, int height) {
     char **board = (char **)malloc(sizeof(char *) * height);
     if (!board) {
         perror("malloc");
@@ -285,14 +285,14 @@ static char **allocate_board(int width, int height) {
     return board;
 }
 
-static void free_board(char **board, int height) {
+void free_board(char **board, int height) {
     for (int y = 0; y < height; y++) {
         free(board[y]);
     }
     free(board);
 }
 
-static void render_game(const Game *g) {
+void render_game(const Game *g) {
     char **board = allocate_board(g->width, g->height);
 
     board[g->food_y][g->food_x] = '*';

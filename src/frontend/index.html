@@ -8,6 +8,7 @@
     <title>Memory Visualizer</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"
         integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+
     <style>
         :root {
             --bg: #0f1117;
@@ -166,7 +167,13 @@
                     <p>Trace File</p>
                     <input type="file" name="input_file" id="input_file" accept=".json">
                 </div>
-                <button onclick="loadStuff()" style="margin-top: 1rem;">Analyze</button>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button onclick="loadStuff()">Analyze</button>
+                        <button onclick="reset()">Reset Graphs</button>
+                    </div>
+                    <button onclick="heapChart && resetGraphs()">Reset Zoom</button>
+                </div>
             </div>
         </div>
 
@@ -255,6 +262,8 @@
         integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
         crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
     <script src="script.js"></script>
 </body>
 

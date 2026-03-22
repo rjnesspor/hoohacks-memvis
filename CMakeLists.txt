@@ -37,7 +37,7 @@ set_target_properties(wrap PROPERTIES
 
 
 # Runner executable
-add_executable(runner
+add_executable(memvis
     src/runner/runner.c
 )
 
@@ -57,46 +57,24 @@ target_link_options(instrumentation_flags INTERFACE
 )
 
 # Example traced program
-add_executable(testprog
+add_executable(testprog1
     tests/testprog.c
 )
 
-target_link_libraries(testprog PRIVATE instrumentation_flags)
-
-add_executable(fun_test
-    tests/function_trace_test.c
-)
+target_link_libraries(testprog1 PRIVATE instrumentation_flags)
 
 
-target_link_libraries(fun_test PRIVATE instrumentation_flags)
-
-add_executable(fun_test2
+add_executable(testprog2
     tests/fun_trace2.c
 )
 
-target_compile_options(fun_test2 PRIVATE
-    -fno-omit-frame-pointer
-    -O0
-)
 
-target_link_options(fun_test2 PRIVATE
-    -rdynamic
-)
-
-target_link_libraries(fun_test2 PRIVATE instrumentation_flags)
+target_link_libraries(testprog2 PRIVATE instrumentation_flags)
 
 add_executable(leaky
     tests/leaky.c
 )
 
-target_compile_options(leaky PRIVATE
-    -fno-omit-frame-pointer
-    -O0
-)
-
-target_link_options(leaky PRIVATE
-    -rdynamic
-)
 
 target_link_libraries(leaky PRIVATE instrumentation_flags)
 

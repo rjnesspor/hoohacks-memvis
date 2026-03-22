@@ -233,6 +233,20 @@ function constructHeapGraph(data) {
                 },
             },
             plugins: {
+                zoom: {
+                    zoom: {
+                        drag: { enabled: true },
+                        mode: 'x',
+                        onZoomComplete: ({ chart }) => {}
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                    },
+                    limits: {
+                        x: { min: 'original', max: 'original' }
+                    }
+                },
                 tooltip: {
                     displayColors: false,
                     callbacks: {
@@ -528,3 +542,11 @@ document.addEventListener('leakModeChanged', (e) => {
 
     heapChart.update('none');
 });
+
+function reset() {
+    window.location.reload();
+}
+
+function resetGraphs() {
+    heapChart.resetZoom();
+};
