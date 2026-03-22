@@ -61,10 +61,16 @@ void test_grid_alloc() {
     free(grid);
 }
 
+void fun1(){
+    sleep(1);
+}
+
 int main() {
+
     test_malloc_free();
     test_calloc_realloc();
     test_concurrent_allocs();
     test_grid_alloc();
+    void * a = malloc(30 * sizeof(float));
     return 0;
 }

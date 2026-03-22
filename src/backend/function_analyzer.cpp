@@ -7,23 +7,35 @@
 #include <cJSON.h>
 #include <stdio.h>
 #include <sys/stat.h>
-#include <time.h>
 #include <unistd.h>
+#include "now.h"
+#include "stack.h"
 
+
+#include "tracer_state.h"
+
+extern int tracer_busy;
+uint8_t* stack_top;
+pthread_attr_t attr;
 
 struct active_event {
     void* fn;
     uint64_t start_ns;
+    uint64_t id;
+    size_t stack_size_begin;
 };
 
 struct finished_trace_event {
     void* fn;
     uint64_t start_ns;
     uint64_t end_ns;
+    uint64_t id;
+    size_t stack_size_begin;
+    size_t stack_size_end;
 };
 
 static constexpr size_t MAX_STACK_DEPTH = 256;
-static constexpr size_t TRACE_BUFFER_SIZE = 1;
+static constexpr size_t TRACE_BUFFER_SIZE = 1024;
 
 thread_local active_event call_stack[MAX_STACK_DEPTH];
 thread_local size_t call_depth = 0;
@@ -39,33 +51,7 @@ static void (*real_free)(void*) = nullptr;
 
 
 static std::atomic<bool> logfile_initialized = false;
-
-
-__attribute__((no_instrument_function))
-static uint64_t to_ns(struct timespec ts) { return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec; }
-
-
-
-__attribute__((no_instrument_function))
-static uint64_t bench_now_ns(void) {
-    #ifndef _WIN32
-        struct timespec ts;
-    #ifdef CLOCK_MONOTONIC_RAW
-        clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-    #else
-        clock_gettime(CLOCK_MONOTONIC, &ts);
-    #endif
-        return to_ns(ts);
-    #else
-        LARGE_INTEGER fq, cn;
-        QueryPerformanceFrequency(&fq);
-        QueryPerformanceCounter(&cn);
-        return (uint64_t)((__int128)cn.QuadPart * 1000000000ull / fq.QuadPart);
-    #endif
-}
-
-
-
+static std::atomic<uint64_t> ID{0};
 
 
 
@@ -73,6 +59,7 @@ __attribute__((no_instrument_function))
 static cJSON *initialize_file(void) {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddArrayToObject(root, "traceEvents");
+    cJSON_AddArrayToObject(root, "stackMemory");
     return root;
 }
 
@@ -117,6 +104,7 @@ static cJSON * json_from_file(const char* filename) {
 
 __attribute__((no_instrument_function))
 static void add_buffered_events_to_json(void){
+    tracer_busy = 1;
     struct cJSON *root = NULL;
     struct stat buffer; 
     pid_t tid = gettid();  
@@ -135,10 +123,14 @@ static void add_buffered_events_to_json(void){
         cJSON_Delete(root);
         return; 
     }
+
+    cJSON *stack_memory= cJSON_GetObjectItem(root, "stackMemory");
     
     for (int i = 0; i < trace_count; i++) {
         const finished_trace_event& function = trace_buffer[i];
         cJSON* event = cJSON_CreateObject();
+        cJSON* stack_begin = cJSON_CreateObject();
+        cJSON* stack_end = cJSON_CreateObject();
 
         Dl_info info{};
         const char* name = "<unknown>";
@@ -153,8 +145,21 @@ static void add_buffered_events_to_json(void){
         cJSON_AddNumberToObject(event, "dur", (static_cast<double>(function.end_ns) - static_cast<double>(function.start_ns)) / double(1000));
         cJSON_AddNumberToObject(event, "pid", static_cast<double>(0));
         cJSON_AddNumberToObject(event, "tid", static_cast<double>(tid));
+        cJSON_AddNumberToObject(event, "id", static_cast<double>(function.id));
 
         cJSON_AddItemToArray(trace_events, event);
+
+        cJSON_AddStringToObject(stack_begin, "event", "function enter");
+        cJSON_AddStringToObject(stack_begin, "name", name);
+        cJSON_AddNumberToObject(stack_begin, "ts", static_cast<double>(function.start_ns) / double(1000));
+        cJSON_AddNumberToObject(stack_begin, "size", function.stack_size_begin);
+        cJSON_AddItemToArray(stack_memory, stack_begin);
+
+        cJSON_AddStringToObject(stack_end, "event", "function exit");
+        cJSON_AddStringToObject(stack_end, "name", name);
+        cJSON_AddNumberToObject(stack_end, "ts", static_cast<double>(function.end_ns) / double(1000));
+        cJSON_AddNumberToObject(stack_end, "size", function.stack_size_end);
+        cJSON_AddItemToArray(stack_memory, stack_end);
     }
 
     char* printed = cJSON_Print(root);
@@ -169,12 +174,21 @@ static void add_buffered_events_to_json(void){
     }
 
     cJSON_Delete(root);
+    tracer_busy = 0;
+}
+
+static inline uint8_t* get_sp(void) {
+    void *sp;
+    asm volatile("mov %%rsp, %0" : "=r"(sp));
+    return static_cast<uint8_t*>(sp);
 }
 
 __attribute__((no_instrument_function))
 static void record_enter(void *fn) {
     if(call_depth >= MAX_STACK_DEPTH) return; // no more space to hold :(
-    call_stack[call_depth++] = active_event{fn, bench_now_ns()};
+    uint64_t id = ID.fetch_add(1, std::memory_order_relaxed);
+    active_event ev{fn, bench_now_ns(), id, stack_top - get_sp()};
+    call_stack[call_depth++] = ev;
 }
 
 __attribute__((no_instrument_function))
@@ -190,11 +204,17 @@ static void func_exit(void) {
     }
 
 
-    trace_buffer[trace_count++] = finished_trace_event{
+    finished_trace_event finished_event{
         ev.fn,
         ev.start_ns,
-        end
+        end, 
+        ev.id,
+        ev.stack_size_begin,
+        stack_top - get_sp()
     };
+
+    trace_buffer[trace_count++] = finished_event;
+
 
     if (call_depth == 0) {
         // likely going to exit, flush buffers
@@ -216,6 +236,11 @@ void __cyg_profile_func_exit(void *this_fn, void *call_site) {
     (void)this_fn;
     (void)call_site;
     func_exit();
+}
+
+
+uint64_t get_function_id(void) {
+    return call_stack[call_depth - 1].id;
 }
 
 }

@@ -8,6 +8,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Shared object that gets LD_PRELOADed
 add_library(wrap SHARED
     src/backend/heap_analyzer.c
+    src/backend/function_analyzer.cpp
 )
 
 add_subdirectory(external/cJSON)
@@ -15,6 +16,7 @@ add_subdirectory(external/cJSON)
 target_link_libraries(wrap PRIVATE dl cjson)
 target_include_directories(wrap PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/external/cJSON
+    tracer_state.h
 )
 
 
@@ -30,11 +32,11 @@ set_target_properties(wrap PROPERTIES
 
 add_library(eric_wrap SHARED
     src/backend/function_analyzer.cpp
-    src/backend/heap_analyzer.c
 )
 target_link_libraries(eric_wrap PRIVATE dl cjson)
 target_include_directories(eric_wrap PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/external/cJSON
+    tracer_state.h
 )
 
 # Prevent the wrapper itself from being instrumented
@@ -60,8 +62,11 @@ target_compile_options(instrumentation_flags INTERFACE
     -finstrument-functions
     -fno-omit-frame-pointer
     -fno-inline
-    -fno-builtin
 )
+
+# target_link_libraries(instrumentation_flags INTERFACE
+#     eric_wrap
+# )
 
 target_link_options(instrumentation_flags INTERFACE
     -rdynamic
@@ -94,4 +99,26 @@ target_link_options(fun_test2 PRIVATE
     -rdynamic
 )
 
+target_link_libraries(fun_test2 PRIVATE instrumentation_flags)
 
+add_executable(leaky
+    tests/leaky.c
+)
+
+target_compile_options(leaky PRIVATE
+    -fno-omit-frame-pointer
+    -O0
+)
+
+target_link_options(leaky PRIVATE
+    -rdynamic
+)
+
+target_link_libraries(leaky PRIVATE instrumentation_flags)
+
+
+add_executable(overlap-add 
+    tests/fft-convolution.cpp
+)
+
+target_link_libraries(overlap-add PRIVATE instrumentation_flags fftw3)
