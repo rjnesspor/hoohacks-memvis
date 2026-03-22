@@ -7,7 +7,14 @@ Memvis is divided into two parts, a profiler and a visualizer. Running the profi
 Memvis helps you to identify and eliminate memory leaks, rogue functions, and otherwise mischief-making pieces of code.
 
 ## How to compile
-To compile Memvis, we have provided a cmake file that will get you 95 percent of the way there. The cmake file compiles our backend components, including the memvis runner binary and the allocation and funciton call wrapping library. In order to interface your binary, we have also included an interface of compiler and linker flags in our cmake file, instrumentation_flags, that are needed for the wrapper library to work. To compile your binary, use our cmake file and include the instrumentation_flags library.
+To compile Memvis, we have provided a cmake file that will get you 95 percent of the way there. The cmake file compiles our backend components, including the memvis runner binary and the allocation and funciton call wrapping library. In order to interface your binary, we have also included an interface of compiler and linker flags in our cmake file, instrumentation_flags, that are needed for the wrapper library to work. To compile your binary, use our cmake file and include the instrumentation_flags library.To compile and run, you can call
+
+```bash
+cmake -S . -B build
+cmake --build build
+cd build
+./memvis ./testprog2
+```
 
 ## How we built it
 Memvis is built on a backend written in **C**, which handles the profiling and data generation. The frontend is written in **JavaScript** which takes care of parsing the input data and visualizing your program.

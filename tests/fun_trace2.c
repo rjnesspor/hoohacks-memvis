@@ -61,10 +61,6 @@ void test_grid_alloc() {
     free(grid);
 }
 
-void fun1(){
-    sleep(1);
-}
-
 int main() {
 
     test_malloc_free();
