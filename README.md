@@ -1,3 +1,6 @@
+# Memvis
+Made by Eric Rippey and Ryan Nesspor for HooHacks 2026.
+
 ## Inspiration
 C is a notoriously tricky beast. Often, it's the first language students learn that involves **dynamic memory management**. Because of this, it can be difficult for beginners (and experts alike!) to keep track of complex pointers and abstract heap memory. That's why we built Memory Visualizer (memvis)! 
 
